@@ -400,7 +400,9 @@ func New(options *Options) (*Runner, error) {
 	runner.scanopts = scanopts
 
 	if options.ShowStatistics {
-		runner.stats, err = clistats.New()
+		statsOptions := &clistats.DefaultOptions
+		statsOptions.ListenPort = options.MetricsPort
+		runner.stats, err = clistats.NewWithOptions(context.Background(), statsOptions)
 		if err != nil {
 			return nil, err
 		}

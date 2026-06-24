@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/projectdiscovery/clistats"
 	_ "github.com/projectdiscovery/fdmax/autofdmax"
 	"github.com/projectdiscovery/httpx/common/httpx"
 	"github.com/projectdiscovery/mapcidr/asn"
@@ -104,6 +105,18 @@ func TestRunner_domain_targets(t *testing.T) {
 		}
 	}
 	require.ElementsMatch(t, expected, got, "could not expected output")
+}
+
+func TestRunner_statsMetricsPort(t *testing.T) {
+	options := &Options{
+		ShowStatistics: true,
+		MetricsPort:    8080,
+	}
+	r, err := New(options)
+	require.Nil(t, err, "could not create httpx runner")
+	stats, ok := r.stats.(*clistats.Statistics)
+	require.True(t, ok, "stats should use clistats")
+	require.Equal(t, 8080, stats.Options.ListenPort)
 }
 
 func TestRunner_probeall_targets(t *testing.T) {
