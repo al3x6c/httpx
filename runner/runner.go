@@ -80,25 +80,25 @@ import (
 
 // Runner is a client for running the enumeration process.
 type Runner struct {
-	seenMux sync.Mutex
-	options            *Options
-	hp                 *httpx.HTTPX
-	wappalyzer         *wappalyzer.Wappalyze
-	cpeDetector        *CPEDetector
-	wpDetector         *WordPressDetector
-	scanopts           ScanOptions
-	hm                 *hybrid.HybridMap
-	excludeCdn         bool
-	stats              clistats.StatisticsClient
-	ratelimiter        ratelimit.Limiter
-	HostErrorsCache    gcache.Cache[string, int]
-	browser            *Browser
-	ditClassifier *dit.Classifier
-	pHashClusters      []pHashCluster
-	simHashes          gcache.Cache[uint64, []string]
-	httpApiEndpoint    *Server
-	authProvider       authprovider.AuthProvider
-	interruptCh        chan struct{}
+	seenMux         sync.Mutex
+	options         *Options
+	hp              *httpx.HTTPX
+	wappalyzer      *wappalyzer.Wappalyze
+	cpeDetector     *CPEDetector
+	wpDetector      *WordPressDetector
+	scanopts        ScanOptions
+	hm              *hybrid.HybridMap
+	excludeCdn      bool
+	stats           clistats.StatisticsClient
+	ratelimiter     ratelimit.Limiter
+	HostErrorsCache gcache.Cache[string, int]
+	browser         *Browser
+	ditClassifier   *dit.Classifier
+	pHashClusters   []pHashCluster
+	simHashes       gcache.Cache[uint64, []string]
+	httpApiEndpoint *Server
+	authProvider    authprovider.AuthProvider
+	interruptCh     chan struct{}
 }
 
 func (r *Runner) HTTPX() *httpx.HTTPX {
@@ -1813,6 +1813,33 @@ func (r *Runner) targets(hp *httpx.HTTPX, target string) chan httpx.Target {
 			for _, ip := range ips {
 				results <- httpx.Target{Host: target, CustomIP: ip}
 			}
+		case strings.EqualFold(r.options.InputMode, "vhost") && strings.ContainsAny(target, " "):
+			// vhost input mode: <target> <ip>
+			fields := strings.Fields(target)
+			if len(fields) != 2 {
+				gologger.Warning().Msgf("Invalid vhost input format: %q (expected '<target> <ip>')\n", target)
+				return
+			}
+			targetHost, customIP := fields[0], fields[1]
+
+			// Validate that customIP is a valid IP
+			if net.ParseIP(customIP) == nil {
+				gologger.Warning().Msgf("Invalid IP in vhost input: %q\n", customIP)
+				return
+			}
+
+			// Ensure we have a valid URL structure for the target
+			URL, err := r.parseURL(targetHost)
+			if err != nil {
+				gologger.Warning().Msgf("Invalid vhost target: %q (%s)\n", targetHost, err)
+				return
+			}
+
+			// For vhost mode, the target becomes the Host and we set CustomIP for the actual connection
+			if !r.testAndSet(URL.String()) {
+				return
+			}
+			results <- httpx.Target{Host: targetHost, CustomIP: customIP}
 		case !stringsutil.HasPrefixAny(target, "http://", "https://") && stringsutil.ContainsAny(target, ","):
 			idxComma := strings.Index(target, ",")
 			results <- httpx.Target{Host: target[idxComma+1:], CustomHost: target[:idxComma]}
@@ -2639,60 +2666,60 @@ retry:
 	}
 
 	result := Result{
-		Timestamp:        time.Now(),
-		Request:          request,
-		LinkRequest:      linkRequest,
-		ResponseHeaders:  responseHeaders,
-		RawHeaders:       rawResponseHeaders,
-		Scheme:           parsed.Scheme,
-		Port:             finalPort,
-		Path:             finalPath,
-		Raw:              resp.Raw,
-		URL:              fullURL,
-		Input:            origInput,
-		ContentLength:    resp.ContentLength,
-		ChainStatusCodes: chainStatusCodes,
-		Chain:            chainItems,
-		StatusCode:       resp.StatusCode,
-		Location:         resp.GetHeaderPart("Location", ";"),
-		ContentType:      resp.GetHeaderPart("Content-Type", ";"),
-		Title:            title,
-		str:              builder.String(),
-		VHost:            isvhost,
-		WebServer:        serverHeader,
-		ResponseBody:     serverResponseRaw,
-		BodyPreview:      bodyPreview,
-		WebSocket:        isWebSocket,
-		TLSData:          resp.TLSData,
-		CSPData:          resp.CSPData,
-		Pipeline:         pipeline,
-		HTTP2:            http2,
-		Method:           method,
-		Host:             parsed.Hostname(),
-		HostIP:           ip,
-		A:                ips4,
-		AAAA:             ips6,
-		CNAMEs:           cnames,
-		CDN:              isCDN,
-		CDNName:          cdnName,
-		CDNType:          cdnType,
-		ResponseTime:     resp.Duration.String(),
-		Technologies:     technologies,
-		FinalURL:         finalURL,
-		FavIconMMH3:      faviconMMH3,
-		FavIconMD5:       faviconMD5,
-		FaviconPath:      faviconPath,
-		FaviconURL:       faviconURL,
-		Hashes:           hashesMap,
-		Extracts:         extractResult,
-		JarmHash:         jarmhash,
-		Lines:            resp.Lines,
-		Words:            resp.Words,
-		ASN:              asnResponse,
-		ExtractRegex:     extractRegex,
-		ScreenshotBytes:  screenshotBytes,
-		HeadlessBody:     headlessBody,
-		KnowledgeBase: r.classifyPage(headlessBody, respData, pHash),
+		Timestamp:         time.Now(),
+		Request:           request,
+		LinkRequest:       linkRequest,
+		ResponseHeaders:   responseHeaders,
+		RawHeaders:        rawResponseHeaders,
+		Scheme:            parsed.Scheme,
+		Port:              finalPort,
+		Path:              finalPath,
+		Raw:               resp.Raw,
+		URL:               fullURL,
+		Input:             origInput,
+		ContentLength:     resp.ContentLength,
+		ChainStatusCodes:  chainStatusCodes,
+		Chain:             chainItems,
+		StatusCode:        resp.StatusCode,
+		Location:          resp.GetHeaderPart("Location", ";"),
+		ContentType:       resp.GetHeaderPart("Content-Type", ";"),
+		Title:             title,
+		str:               builder.String(),
+		VHost:             isvhost,
+		WebServer:         serverHeader,
+		ResponseBody:      serverResponseRaw,
+		BodyPreview:       bodyPreview,
+		WebSocket:         isWebSocket,
+		TLSData:           resp.TLSData,
+		CSPData:           resp.CSPData,
+		Pipeline:          pipeline,
+		HTTP2:             http2,
+		Method:            method,
+		Host:              parsed.Hostname(),
+		HostIP:            ip,
+		A:                 ips4,
+		AAAA:              ips6,
+		CNAMEs:            cnames,
+		CDN:               isCDN,
+		CDNName:           cdnName,
+		CDNType:           cdnType,
+		ResponseTime:      resp.Duration.String(),
+		Technologies:      technologies,
+		FinalURL:          finalURL,
+		FavIconMMH3:       faviconMMH3,
+		FavIconMD5:        faviconMD5,
+		FaviconPath:       faviconPath,
+		FaviconURL:        faviconURL,
+		Hashes:            hashesMap,
+		Extracts:          extractResult,
+		JarmHash:          jarmhash,
+		Lines:             resp.Lines,
+		Words:             resp.Words,
+		ASN:               asnResponse,
+		ExtractRegex:      extractRegex,
+		ScreenshotBytes:   screenshotBytes,
+		HeadlessBody:      headlessBody,
+		KnowledgeBase:     r.classifyPage(headlessBody, respData, pHash),
 		TechnologyDetails: technologyDetails,
 		Resolvers:         resolvers,
 		RequestRaw:        requestDump,

@@ -19,6 +19,7 @@ type Format interface {
 // Supported formats
 var formats = []Format{
 	NewBurpFormat(),
+	NewVhostFormat(),
 }
 
 // GetFormat returns the format by name
